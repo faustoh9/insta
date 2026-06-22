@@ -10,6 +10,8 @@ import requests
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, InputMediaVideo
 import instaloader
+import html
+import io
 
 # ==========================================
 # 1. SERVER & ENVIRONMENT SETUP
@@ -214,39 +216,62 @@ def handle_message(message):
             bot.edit_message_text("❌ Profile not found.", message.chat.id, msg.message_id)
             return
         except Exception as e:
-            bot.edit_message_text("❌ Cannot fetch profile (Cookie might be invalid/expired or rate limit hit).", message.chat.id, msg.message_id)
+            bot.edit_message_text(f"❌ Cannot fetch profile (Cookie might be invalid/expired).\nError: {e}", message.chat.id, msg.message_id)
             return
 
-        # Prepare rich Profile UI
+        # Prepare rich Profile UI (with safe HTML escaping)
         status = "🔒 Private Account" if profile.is_private else "🔓 Public Account"
+        
+        full_name_esc = html.escape(profile.full_name or "")
+        username_esc = html.escape(profile.username or "")
+        bio_esc = html.escape(profile.biography or "")
+        
         caption = (
-            f"👤 <b>{profile.full_name}</b> (@{profile.username})\n"
+            f"👤 <b>{full_name_esc}</b> (@{username_esc})\n"
             f"📊 {status}\n"
             f"👥 <b>Followers:</b> {profile.followers:,} | <b>Following:</b> {profile.followees:,}\n\n"
-            f"📝 <b>Bio:</b>\n{profile.biography}"
+            f"📝 <b>Bio:</b>\n{bio_esc}"
         )
 
         markup = InlineKeyboardMarkup()
-        markup.row(InlineKeyboardButton("📸 Download HD Avatar", callback_data=f"ava:{username}"))
+        markup.row(InlineKeyboardButton("📸 Download HD Avatar", callback_data=f"ava:{profile.username}"))
         
         if not profile.is_private or profile.followed_by_viewer:
             markup.row(
-                InlineKeyboardButton("🖼️ Last 10 Posts", callback_data=f"po:{username}"),
-                InlineKeyboardButton("🎥 Last 10 Reels", callback_data=f"re:{username}")
+                InlineKeyboardButton("🖼️ Last 10 Posts", callback_data=f"po:{profile.username}"),
+                InlineKeyboardButton("🎥 Last 10 Reels", callback_data=f"re:{profile.username}")
             )
             markup.row(
-                InlineKeyboardButton("⏱️ All Stories", callback_data=f"st:{username}"),
-                InlineKeyboardButton("✨ Highlights", callback_data=f"hl_menu:{username}")
+                InlineKeyboardButton("⏱️ All Stories", callback_data=f"st:{profile.username}"),
+                InlineKeyboardButton("✨ Highlights", callback_data=f"hl_menu:{profile.username}")
             )
 
+        # Download avatar to memory to prevent Telegram from dropping a 403 CDN Error
+        try:
+            r = requests.get(profile.profile_pic_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            photo_data = io.BytesIO(r.content)
+            photo_data.name = "avatar.jpg"
+        except:
+            photo_data = profile.profile_pic_url # Fallback if local fetching fails
+
         bot.delete_message(message.chat.id, msg.message_id)
-        bot.send_photo(
-            message.chat.id,
-            profile.profile_pic_url,
-            caption=caption,
-            parse_mode="HTML",
-            reply_markup=markup
-        )
+        
+        try:
+            bot.send_photo(
+                message.chat.id,
+                photo_data,
+                caption=caption,
+                parse_mode="HTML",
+                reply_markup=markup
+            )
+        except Exception as e:
+            # Fallback to Text-Only mode if picture fails entirely
+            bot.send_message(
+                message.chat.id,
+                caption,
+                parse_mode="HTML",
+                reply_markup=markup
+            )
 
 # ==========================================
 # 5. CALLBACK / BUTTON INTERACTIONS
@@ -262,8 +287,13 @@ def callback_query(call):
         bot.answer_callback_query(call.id, "Downloading HD Avatar...")
         try:
             profile = instaloader.Profile.from_username(L.context, username)
-            r = requests.get(profile.profile_pic_url, headers={"User-Agent": "Mozilla/5.0"})
-            bot.send_document(chat_id, r.content, visible_file_name=f"{username}_avatar.jpg")
+            r = requests.get(profile.profile_pic_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            
+            # Wrap as an io.BytesIO Object for reliability when sending as a Document
+            photo_file = io.BytesIO(r.content)
+            photo_file.name = f"{username}_avatar.jpg"
+            
+            bot.send_document(chat_id, photo_file)
         except Exception:
             bot.send_message(chat_id, "❌ Failed to fetch HD Avatar.")
 
