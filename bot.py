@@ -7,6 +7,8 @@ from threading import Thread
 
 # Get the Bot Token from Render Environment Variables
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
+
+# Initialize the bot
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # Flask app to satisfy Render.com port binding requirement
@@ -17,6 +19,7 @@ def index():
     return "Bot is running!"
 
 def run_flask():
+    # Render assigns a dynamic port, default to 10000 if not found
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
@@ -37,7 +40,7 @@ def handle_instagram_url(message):
         # Build the gallery-dl command
         command = ['gallery-dl', '-d', dl_dir]
         
-        # Attach cookies if the file exists (Required for Instagram)
+        # Attach cookies if the file exists (Highly recommended for Instagram)
         if os.path.exists('cookies.txt'):
             command.extend(['--cookies', 'cookies.txt'])
             
@@ -72,7 +75,7 @@ def handle_instagram_url(message):
                 else:
                     bot.send_document(message.chat.id, f)
                     
-        # Delete the status message
+        # Delete the status message once everything is sent
         bot.delete_message(message.chat.id, status_msg.message_id)
     
     except subprocess.CalledProcessError:
@@ -89,21 +92,12 @@ def handle_instagram_url(message):
             shutil.rmtree(dl_dir)
 
 if __name__ == "__main__":
-    # Start the Flask web server in a background thread
+    # 1. Start the Flask web server in a background thread
     Thread(target=run_flask).start()
     
-    # Start the Telegram bot polling
-    print("Bot is starting...")
-    bot.infinity_polling()
-
-if __name__ == "__main__":
-    # Start the Flask web server in a background thread
-    Thread(target=run_flask).start()
-    
-    # --- ADD THIS LINE ---
-    # Remove any existing webhooks to prevent 409 Conflict errors
+    # 2. Remove any existing webhooks to prevent 409 Conflict errors
     bot.remove_webhook()
     
-    # Start the Telegram bot polling
+    # 3. Start the Telegram bot polling
     print("Bot is starting...")
     bot.infinity_polling()
