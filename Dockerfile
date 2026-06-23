@@ -1,21 +1,25 @@
-FROM python:3.10-slim
+# Use an official lightweight Python image
+FROM python:3.11-slim
 
-# Install system dependencies including ffmpeg
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-# Force Python to output logs immediately to Render's dashboard
+# Prevent Python from writing .pyc files and buffering stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Set the working directory inside the container
 WORKDIR /app
 
-# Install python packages
+# Copy only the requirements first to leverage Docker layer caching
 COPY requirements.txt .
+
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the bot code
+# Copy the rest of the application files
 COPY . .
 
-CMD ["python", "bot.py"]
+# Render dynamically assigns a port using the $PORT environment variable.
+# We default to 10000 if $PORT is not set (useful for local testing).
+EXPOSE 10000
+
+# Start the FastAPI application using Uvicorn
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
