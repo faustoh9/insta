@@ -95,3 +95,15 @@ if __name__ == "__main__":
     # Start the Telegram bot polling
     print("Bot is starting...")
     bot.infinity_polling()
+
+if __name__ == "__main__":
+    # Start the Flask web server in a background thread
+    Thread(target=run_flask).start()
+    
+    # --- ADD THIS LINE ---
+    # Remove any existing webhooks to prevent 409 Conflict errors
+    bot.remove_webhook()
+    
+    # Start the Telegram bot polling
+    print("Bot is starting...")
+    bot.infinity_polling()
