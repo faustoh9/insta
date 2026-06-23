@@ -3,6 +3,7 @@ import re
 import logging
 from fastapi import FastAPI, Request
 from aiogram import Bot, Dispatcher, types
+from aiogram.filters import CommandStart  # Correct import for aiogram v3
 import instaloader
 import httpx
 
@@ -55,7 +56,6 @@ def extract_username(url: str) -> str:
 
 # Fallback: API Downloader via RapidAPI (Free tier)
 async def download_via_rapidapi(message: types.Message, ig_url: str, status_msg: types.Message):
-    # This uses a standard, fast RapidAPI endpoint structure
     api_url = "https://instagram-post-reels-stories-downloader.p.rapidapi.com/instagram"
     headers = {
         "x-rapidapi-key": RAPIDAPI_KEY,
@@ -82,8 +82,8 @@ async def download_via_rapidapi(message: types.Message, ig_url: str, status_msg:
         except Exception as e:
             await status_msg.edit_text(f"❌ Fallback API request failed: {str(e)}")
 
-# Telegram Command: /start
-@dp.message(commands=["start"])
+# Telegram Command: /start (Fixed for aiogram v3)
+@dp.message(CommandStart())
 async def send_welcome(message: types.Message):
     await message.answer(
         "👋 **Instagram Downloader Bot**\n\n"
