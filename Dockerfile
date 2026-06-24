@@ -11,9 +11,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy bot files and cookies
-COPY bot.py .
+# Copy the bot code (now named app.py) and cookies
+COPY app.py .
 COPY cookies.txt .
 
-# Run the bot
-CMD ["python", "bot.py"]
+# Run the app
+CMD ["python", "app.py"]
